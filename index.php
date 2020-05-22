@@ -7,57 +7,53 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
   $messages = array();
   $errors = array();
   $values = array();
-
+  $response = array();
   if (empty($errors) && isset($_COOKIE[session_name()]) && session_start() && isset($_SESSION['login'])) {
     // загружаем данные пользователя из БД и заполняем переменную $values
     $db = connectToDB();
-    try {
-      $stmt = $db->prepare("SELECT * FROM user WHERE login = ?");
-      $stmt->execute([$_SESSION['login']]);
-      $response = $stmt->fetch(PDO::FETCH_ASSOC);
-      // print 'Response from db:</br>';
-      // print_r($response);
-      foreach ($response as $key => $value) {
-        switch ($key) {
-          case 'fio':
-            $values[$key] = $value;
-            break;
-          case 'email':
-            $values[$key] = $value;
-            break;
-          case 'year':
-            $values[$key] = $value;
-            break;
-          case 'sex':
-            $values[$key] = $value;
-            break;
-          case 'limbs':
-            $values[$key] = $value;
-            break;
-          case 'god':
-            if ($value == 1) {
-              $values[substr($key, 6)] = $value;
-            }
-            break;
-          case 'fly':
-            if ($value == 1) {
-              $values[substr($key, 6)] = $value;
-            }
-            break;
-          case 'idclip':
-            if ($value == 1) {
-              $values[substr($key, 6)] = $value;
-            }
-            break;
-          case 'bio':
-            $values[$key] = $value;
-            break;
-        }
+    $stmt = $db->prepare("SELECT * FROM user WHERE login = ?");
+    $stmt->execute([$_SESSION['login']]);
+    $response = $stmt->fetch(PDO::FETCH_ASSOC);
+    foreach ($response as $key => $value) {
+      switch ($key) {
+        case 'fio':
+          $values['fio'] = $value;
+          break;
+        case 'email':
+          $values['email'] = $value;
+          break;
+        case 'year':
+          $values['year'] = $value;
+          break;
+        case 'sex':
+          $values['sex'] = $value;
+          break;
+        case 'limbs':
+          $values['limbs'] = $value;
+          break;
+        case 'god':
+          if ($value == 1) {
+            $values['god'] = $value;
+          }
+          break;
+        case 'fly':
+          if ($value == 1) {
+            $values['fly'] = $value;
+          }
+          break;
+        case 'idclip':
+          if ($value == 1) {
+            $values['idclip'] = $value;
+          }
+          break;
+        case 'bio':
+          $values['bio'] = $value;
+          break;
       }
-    } catch (PDOException $e) {
-      exit($e->getMessage());
     }
+    $values['contract'] = "off";
   } else {
+    // если заходим не после успешного логина
     $values['fio'] = empty($_COOKIE['fio_value']) ? '' : $_COOKIE['fio_value'];
     $values['email'] = empty($_COOKIE['email_value']) ? '' : $_COOKIE['email_value'];
     $values['year'] = empty($_COOKIE['year_value']) ? '' : $_COOKIE['year_value'];
@@ -70,7 +66,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
     $values['bio'] = empty($_COOKIE['bio_value']) ? '' : $_COOKIE['bio_value'];
     $values['contract'] = empty($_COOKIE['contract_value']) ? '' : $_COOKIE['contract_value'];
   }
-
+  if (isset($_COOKIE['save_form'])) {
+    if ($_COOKIE['save_form'] == 1) {
+          $messages[] = 'thank you, results are saved';
+      if (isset($_COOKIE['pass'])) {
+        $messages[] = sprintf('<br>Вы можете <a href="login.php">войти</a> с логином <strong>%s</strong>
+          и паролем <strong>%s</strong> для изменения данных.<br>',
+          strip_tags($_COOKIE['login']),
+          strip_tags($_COOKIE['pass'])
+        );
+      }
+      setcookie('login', '', 1);
+      setcookie('pass', '', 1);
+      setcookie('save_form', '', 1);
+    }}
+  // Складываем признак ошибок в массив.
   $errors['fio'] = !empty($_COOKIE['fio_error']);
   $errors['email'] = !empty($_COOKIE['email_error']);
   $errors['year'] = !empty($_COOKIE['year_error']);
@@ -114,27 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
     setcookie('contract_error', '', 100000);
     $messages[] = '<div class="error">accept the contract</div>';
   }
-///////////
-if (isset($_COOKIE['save'])) {
-  if ($_COOKIE['save'] == 1) {
-    $popup_messages[] = 'thank you, result are saved';
-    // Если в куках есть пароль, то выводим сообщение.
-    if (isset($_COOKIE['pass'])) {
-      $reg_data_msg = sprintf(
-        'You can <a href="login.php">log in</a> with:</br>
-        login - <strong>%s</strong></br>
-        password - <strong>%s</strong></br>',
-        strip_tags($_COOKIE['login']),
-        strip_tags($_COOKIE['pass'])
-      );
-    }
-    setcookie('login', '', 1);
-    setcookie('pass', '', 1);
-  }
 
-
-  setcookie('save', '', 1); // удаляем куку о сохранении
-}
   include('form.php');
 }
 else {
@@ -223,7 +213,6 @@ else {
 // ****************************************************************************
 
   if ($errors) {
-    setcookie('save_form', 0);
     header('Location: index.php');
     exit();
   }
@@ -239,6 +228,7 @@ else {
     setcookie('contract_error', '', 100000);
 
     // TODO: тут необходимо удалить остальные Cookies.
+
     setcookie('fio_value', '', 100000);
     setcookie('email_value', '', 100000);
     setcookie('year_value', '', 100000);
@@ -249,36 +239,38 @@ else {
     setcookie('idclip_value', '', 100000);
     setcookie('bio_value', '', 100000);
     setcookie('contract_value', '', 100000);
+
   }
+  /////////////////DB
   $db = connectToDB();
-  if (isset($_COOKIE[session_name()]) && session_start() && isset($_SESSION['login'])) {
-    // одновляем данные пользователя в бд
-    // TODO 0: проверять, какие данные надо обновить, а какие остались неизменными
-    try {
+  // Проверяем меняются ли ранее сохраненные данные или отправляются новые.
+
+  if (!empty($_COOKIE[session_name()]) && session_start() && isset($_SESSION['login'])) {
+
+  try {
       $stmt = $db->prepare("UPDATE user SET fio = ?, email = ?, year = ?, sex = ?, limbs = ?,  god = ?, fly = ?, idclip = ?, bio = ? WHERE login = ?");
-      $stmt->execute([$_POST['fio'], $_POST['email'], intval($_POST['year']), $_POST['sex'], intval($_POST['limbs']), $abilities_insert['god'], $abilities_insert['fly'], $abilities_insert['idclip'], $_POST['bio'], $_SESSION['login'] ]);
+      $stmt->execute([ $_POST['fio'], $_POST['email'], intval($_POST['year']), $_POST['sex'], intval($_POST['limbs']), $abilities_insert['god'], $abilities_insert['fly'], $abilities_insert['idclip'], $_POST['bio'], $_SESSION['login'] ]);
     } catch (PDOException $e) {
       exit($e->getMessage());
     }
-  } else {
-    // Generate unique login and password
-    // TODO 0: проверять, есть ли уже такие логин / пароль в базе
-    $login = substr(md5(time()), 0, 8);
-    $pass = substr(md5(time() + 1), 0, 8);
-    $pass_hash = password_hash($pass, PASSWORD_DEFAULT);
-    setcookie('login', $login);
-    setcookie('pass', $pass);
+}
+else {
+  // Generate uniq login and pass
+  // TODO 0: проверять, есть ли уже такие логин / пароль в базе
+  $login = substr(md5(time()), 0, 8);
+  $pass = substr(md5(time() + 1), 0, 8);
+  $pass_hash = password_hash($pass, PASSWORD_DEFAULT);
+  setcookie('login', $login);
+  setcookie('pass', $pass);
 
-    try {
-      $stmt = $db->prepare("INSERT INTO user SET login = ?, pass_hash = ?, fio = ?, email = ?, year = ?, sex = ?, limbs = ?,  god = ?, fly = ?, idclip = ?, bio = ?");
-      $stmt->execute([$login, $pass_hash, $_POST['fio'], $_POST['email'], intval($_POST['year']), $_POST['sex'], intval($_POST['limbs']), $abilities_insert['god'], $abilities_insert['fly'], $abilities_insert['idclip'], $_POST['bio'] ]);
+  try {
+      $stmt = $db->prepare("INSERT INTO user SET login = ?, pass_hash = ?,fio = ?, email = ?, year = ?, sex = ?, limbs = ?,  god = ?, fly = ?, idclip = ?, bio = ?");
+      $stmt->execute([ $login, $pass_hash, $_POST['fio'], $_POST['email'], intval($_POST['year']), $_POST['sex'], intval($_POST['limbs']), $abilities_insert['god'], $abilities_insert['fly'], $abilities_insert['idclip'], $_POST['bio'] ]);
     } catch (PDOException $e) {
       exit($e->getMessage());
     }
-  }
-  // Сохраняем куку с признаком успешного сохранения.
-  setcookie('save', '1');
+}
 
-  // Делаем перенаправление.
+  setcookie('save_form', 1);
   header('Location: index.php');
 }
